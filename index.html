@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#FFF3E0">
+  <title>汉字笔画渐进展示</title>
+  <style>
+    :root {
+      --bg-primary: #FFF3E0;
+      --bg-secondary: #FFE0B2;
+      --bg-card: #FFFBF5;
+      --accent: #E65100;
+      --accent-light: #FF9800;
+      --text: #3E2723;
+      --stroke-color: #1A1A1A;
+      --grid-border: #FFCC80;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+      min-height: 100vh;
+      color: var(--text);
+      padding: 16px;
+      padding-bottom: env(safe-area-inset-bottom, 16px);
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+      padding: 20px 16px;
+      background: var(--bg-card);
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(230, 81, 0, 0.1);
+    }
+
+    .header h1 {
+      font-size: 22px;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+
+    .header p {
+      font-size: 13px;
+      color: #8D6E63;
+    }
+
+    .input-section {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .input-wrapper {
+      flex: 1;
+      position: relative;
+    }
+
+    #charInput {
+      width: 100%;
+      padding: 14px 16px;
+      font-size: 18px;
+      border: 2px solid var(--grid-border);
+      border-radius: 12px;
+      background: var(--bg-card);
+      color: var(--text);
+      outline: none;
+      transition: border-color 0.3s;
+      font-family: inherit;
+    }
+
+    #charInput:focus {
+      border-color: var(--accent);
+    }
+
+    #charInput::placeholder {
+      color: #BCAAA4;
+    }
+
+    #searchBtn {
+      padding: 0 24px;
+      font-size: 16px;
+      font-weight: 600;
+      color: white;
+      background: linear-gradient(135deg, var(--accent-light), var(--accent));
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+      font-family: inherit;
+      min-width: 80px;
+    }
+
+    #searchBtn:active {
+      transform: scale(0.96);
+    }
+
+    #searchBtn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .error-message {
+      background: #FFEBEE;
+      color: #C62828;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 14px;
+      display: none;
+      margin-bottom: 16px;
+    }
+
+    .error-message.visible {
+      display: block;
+    }
+
+    .strokes-section {
+      background: var(--bg-card);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 4px 20px rgba(230, 81, 0, 0.08);
+      display: none;
+    }
+
+    .strokes-section.visible {
+      display: block;
+    }
+
+    .strokes-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .strokes-title {
+      font-size: 14px;
+      color: #8D6E63;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .strokes-title::before {
+      content: "";
+      display: inline-block;
+      width: 4px;
+      height: 16px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    .strokes-info {
+      font-size: 13px;
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .strokes-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .stroke-cell {
+      aspect-ratio: 1;
+      background: var(--bg-primary);
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: visible;
+      transition: transform 0.3s, box-shadow 0.3s, opacity 0.3s;
+      border: 2px solid transparent;
+      opacity: 0;
+      transform: scale(0.9);
+    }
+
+    .stroke-cell.visible {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    .stroke-cell.active {
+      border-color: var(--accent);
+      box-shadow: 0 4px 12px rgba(230, 81, 0, 0.3);
+    }
+
+    .stroke-cell.done {
+      background: var(--bg-secondary);
+    }
+
+    .stroke-cell svg {
+      width: 85%;
+      height: 85%;
+    }
+
+    .stroke-cell svg > path {
+      fill: var(--stroke-color);
+      stroke: none;
+    }
+
+    .stroke-number {
+      position: absolute;
+      top: -6px;
+      left: -6px;
+      width: 20px;
+      height: 20px;
+      background: var(--accent);
+      color: white;
+      font-size: 11px;
+      font-weight: 700;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+      box-shadow: 0 2px 6px rgba(230, 81, 0, 0.3);
+    }
+
+    .strokes-controls {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      padding-top: 8px;
+      border-top: 1px solid var(--bg-secondary);
+    }
+
+    .control-btn {
+      padding: 10px 24px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--accent);
+      background: var(--bg-secondary);
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: transform 0.2s, background 0.2s;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .control-btn:active {
+      transform: scale(0.96);
+    }
+
+    .control-btn.primary {
+      color: white;
+      background: linear-gradient(135deg, var(--accent-light), var(--accent));
+    }
+
+    .control-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .quick-chars {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+      justify-content: center;
+    }
+
+    .quick-char {
+      padding: 8px 14px;
+      background: var(--bg-secondary);
+      color: var(--accent);
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: transform 0.2s, background 0.2s;
+      font-family: inherit;
+    }
+
+    .quick-char:active {
+      transform: scale(0.92);
+      background: var(--accent-light);
+      color: white;
+    }
+
+    @media (max-width: 360px) {
+      .strokes-grid {
+        gap: 6px;
+      }
+
+      .stroke-number {
+        width: 18px;
+        height: 18px;
+        font-size: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>汉字笔画渐进展示</h1>
+      <p>输入汉字，逐笔演示书写顺序</p>
+    </div>
+
+    <div class="input-section">
+      <div class="input-wrapper">
+        <input
+          type="text"
+          id="charInput"
+          maxlength="1"
+          placeholder="请输入汉字"
+          autocomplete="off"
+        >
+      </div>
+      <button id="searchBtn">演示</button>
+    </div>
+
+    <div class="error-message" id="errorMessage"></div>
+
+    <div class="strokes-section" id="strokesSection">
+      <div class="strokes-header">
+        <div class="strokes-title">笔画分解</div>
+        <div class="strokes-info" id="strokesInfo"></div>
+      </div>
+      <div class="strokes-grid" id="strokesGrid"></div>
+      <div class="strokes-controls">
+        <button class="control-btn primary" id="playBtn">▶ 重播</button>
+        <button class="control-btn" id="resetBtn">↺ 重置</button>
+      </div>
+    </div>
+
+    <div class="quick-chars" id="quickChars">
+      <button class="quick-char" data-char="永">永</button>
+      <button class="quick-char" data-char="中">中</button>
+      <button class="quick-char" data-char="国">国</button>
+      <button class="quick-char" data-char="爱">爱</button>
+      <button class="quick-char" data-char="書">書</button>
+      <button class="quick-char" data-char="龙">龙</button>
+    </div>
+  </div>
+
+  <script>
+    const CDN_BASE = 'https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0';
+
+    const charInput = document.getElementById('charInput');
+    const searchBtn = document.getElementById('searchBtn');
+    const errorMessage = document.getElementById('errorMessage');
+    const strokesSection = document.getElementById('strokesSection');
+    const strokesGrid = document.getElementById('strokesGrid');
+    const strokesInfo = document.getElementById('strokesInfo');
+    const playBtn = document.getElementById('playBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const quickChars = document.getElementById('quickChars');
+
+    let currentCharData = null;
+    let currentChar = '';
+    let isPlaying = false;
+    let animationTimeouts = [];
+    let animationFrames = [];
+
+    function clearAll() {
+      animationTimeouts.forEach(t => clearTimeout(t));
+      animationTimeouts = [];
+      animationFrames.forEach(f => cancelAnimationFrame(f));
+      animationFrames = [];
+    }
+
+    function showError(msg) {
+      errorMessage.textContent = msg;
+      errorMessage.classList.add('visible');
+      setTimeout(() => errorMessage.classList.remove('visible'), 3000);
+    }
+
+    async function fetchCharData(char) {
+      const url = `${CDN_BASE}/${encodeURIComponent(char)}.json`;
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error('未找到该汉字的笔画数据');
+      }
+      return response.json();
+    }
+
+    function flipPathY(d) {
+      // 将路径数据中的 Y 坐标翻转：y -> 1024 - y
+      // 适用于 hanzi-writer-data 的绝对坐标命令 M L Q C Z
+      const tokens = d.match(/[MLQCZmlqcz]|-?\d*\.?\d+(?:e[+-]?\d+)?/gi);
+      if (!tokens) return d;
+      let result = '';
+      let i = 0;
+      while (i < tokens.length) {
+        const cmd = tokens[i++];
+        result += cmd + ' ';
+        if (cmd === 'Z' || cmd === 'z') continue;
+        // 收集该命令的所有数字参数
+        const nums = [];
+        while (i < tokens.length && /[-\d.]/.test(tokens[i])) {
+          nums.push(parseFloat(tokens[i++]));
+        }
+        // 每两个数字一组 (x, y)，翻转 y
+        for (let j = 0; j < nums.length; j += 2) {
+          result += nums[j] + ' ';
+          if (j + 1 < nums.length) {
+            result += (1024 - nums[j + 1]) + ' ';
+          }
+        }
+      }
+      return result;
+    }
+
+    // 将 median 点序列转为 SVG path：M x0 y0 L x1 y1 L x2 y2 ...
+    // median 是书写轨迹中心线（来自 hanzi-writer-data 的 medians 字段），方向 = 书写方向
+    function medianToPath(median) {
+      if (!median || median.length === 0) return '';
+      let d = `M ${median[0][0]} ${median[0][1]}`;
+      for (let i = 1; i < median.length; i++) {
+        d += ` L ${median[i][0]} ${median[i][1]}`;
+      }
+      return d;
+    }
+
+    function createStrokeSVG(strokes, medians, currentIndex) {
+      const NS = 'http://www.w3.org/2000/svg';
+      const cell = document.createElement('div');
+      cell.className = 'stroke-cell';
+      cell.dataset.index = currentIndex;
+
+      const number = document.createElement('div');
+      number.className = 'stroke-number';
+      number.textContent = currentIndex + 1;
+      cell.appendChild(number);
+
+      const svg = document.createElementNS(NS, 'svg');
+      svg.setAttribute('viewBox', '0 0 1024 1024');
+      svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+
+      // 渲染累积笔画：0 到 currentIndex 的所有笔画（Y 轴已翻转，无需 group 变换）
+      for (let i = 0; i <= currentIndex; i++) {
+        const flippedD = flipPathY(strokes[i]);
+        const path = document.createElementNS(NS, 'path');
+        path.setAttribute('d', flippedD);
+        path.setAttribute('data-stroke-index', i);
+
+        if (i === currentIndex) {
+          path.classList.add('current-stroke');
+
+          // mask 的描边路径用 median（书写中心线），而不是 fill 轮廓
+          // fill 轮廓是闭合边界，方向与书写无关；median 才是真正的书写轨迹
+          const medianD = medianToPath(medians && medians[i] ? medians[i] : []);
+          const maskPathD = medianD ? flipPathY(medianD) : flippedD;
+
+          const maskId = `m-${currentIndex}-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
+          const mask = document.createElementNS(NS, 'mask');
+          mask.setAttribute('id', maskId);
+          mask.setAttribute('maskUnits', 'userSpaceOnUse');
+          mask.setAttribute('maskContentUnits', 'userSpaceOnUse');
+          mask.setAttribute('x', '0');
+          mask.setAttribute('y', '0');
+          mask.setAttribute('width', '1024');
+          mask.setAttribute('height', '1024');
+          mask.setAttribute('mask-type', 'alpha');
+
+          const maskPathEl = document.createElementNS(NS, 'path');
+          maskPathEl.setAttribute('d', maskPathD);
+          maskPathEl.setAttribute('stroke', 'white');
+          maskPathEl.setAttribute('stroke-width', '200');
+          maskPathEl.setAttribute('fill', 'none');
+          maskPathEl.setAttribute('stroke-linecap', 'round');
+          maskPathEl.setAttribute('stroke-linejoin', 'round');
+          maskPathEl.setAttribute('pathLength', '1');
+          // 初始即隐藏，避免 cell 可见瞬间闪现整笔
+          maskPathEl.setAttribute('stroke-dasharray', '1');
+          maskPathEl.setAttribute('stroke-dashoffset', '1');
+          mask.appendChild(maskPathEl);
+
+          svg.appendChild(mask);
+
+          path.setAttribute('mask', `url(#${maskId})`);
+          path._maskPathEl = maskPathEl; // 直接引用
+        }
+
+        svg.appendChild(path);
+      }
+      cell.appendChild(svg);
+
+      return cell;
+    }
+
+    function getGridColumns(totalStrokes) {
+      if (totalStrokes <= 3) return totalStrokes;
+      if (totalStrokes <= 5) return totalStrokes;
+      return 5;
+    }
+
+    function renderStrokesGrid(strokes, medians) {
+      strokesGrid.innerHTML = '';
+      strokesInfo.textContent = `共 ${strokes.length} 笔`;
+
+      const columns = getGridColumns(strokes.length);
+      strokesGrid.style.gridTemplateColumns = `repeat(${columns}, 1fr)`;
+
+      if (strokes.length <= 5) {
+        strokesGrid.style.maxWidth = `${strokes.length * 70}px`;
+        strokesGrid.style.margin = '0 auto';
+      } else {
+        strokesGrid.style.maxWidth = '';
+        strokesGrid.style.margin = '';
+      }
+
+      strokes.forEach((_, index) => {
+        const cell = createStrokeSVG(strokes, medians, index);
+        strokesGrid.appendChild(cell);
+      });
+
+      strokesSection.classList.add('visible');
+    }
+
+    function animateStroke(index, onComplete) {
+      const cells = strokesGrid.querySelectorAll('.stroke-cell');
+
+      if (index >= cells.length) {
+        isPlaying = false;
+        playBtn.textContent = '▶ 重播';
+        playBtn.disabled = false;
+        if (onComplete) onComplete();
+        return;
+      }
+
+      const currentCell = cells[index];
+      const currentPath = currentCell.querySelector('.current-stroke');
+
+      currentCell.classList.add('visible', 'active');
+
+      if (currentPath) {
+        // 用 mask 沿笔画轨迹逐步揭示填充形状
+        const maskPathEl = currentPath._maskPathEl;
+
+        const DURATION = 800;
+
+        if (maskPathEl) {
+          // 使用 pathLength="1" 归一化，dasharray=1，dashoffset 从 1 到 0
+          maskPathEl.setAttribute('stroke-dasharray', '1');
+          maskPathEl.setAttribute('stroke-dashoffset', '1');
+
+          // 逐帧用 setAttribute 更新（比 style 更可靠地触发 SVG 重绘）
+          const startTime = performance.now();
+
+          function tick(now) {
+            const elapsed = now - startTime;
+            const progress = Math.min(elapsed / DURATION, 1);
+            const eased = progress < 0.5
+              ? 2 * progress * progress
+              : 1 - Math.pow(-2 * progress + 2, 2) / 2;
+            maskPathEl.setAttribute('stroke-dashoffset', (1 - eased).toFixed(4));
+
+            if (progress < 1) {
+              animationFrames.push(requestAnimationFrame(tick));
+            }
+          }
+
+          // 延迟一帧确保初始 dashoffset 生效
+          animationFrames.push(requestAnimationFrame(() => {
+            animationFrames.push(requestAnimationFrame(tick));
+          }));
+        }
+
+        // 书写完成后，移除 mask 显示完整笔画
+        const timeout = setTimeout(() => {
+          currentPath.removeAttribute('mask');
+
+          currentCell.classList.remove('active');
+          currentCell.classList.add('done');
+
+          const nextTimeout = setTimeout(() => {
+            animateStroke(index + 1, onComplete);
+          }, 150);
+          animationTimeouts.push(nextTimeout);
+        }, DURATION + 50);
+        animationTimeouts.push(timeout);
+      } else {
+        const timeout = setTimeout(() => {
+          currentCell.classList.remove('active');
+          currentCell.classList.add('done');
+          animateStroke(index + 1, onComplete);
+        }, 700);
+        animationTimeouts.push(timeout);
+      }
+    }
+
+    function playAnimation() {
+      if (!currentCharData || isPlaying) return;
+      isPlaying = true;
+      playBtn.disabled = true;
+      playBtn.textContent = '⏸ 演示中...';
+
+      const cells = strokesGrid.querySelectorAll('.stroke-cell');
+
+      cells.forEach(c => {
+        c.classList.remove('visible', 'active', 'done');
+        const currentPath = c.querySelector('.current-stroke');
+        if (currentPath) {
+          const maskEl = currentPath._maskPathEl;
+          if (maskEl) {
+            // 重置为隐藏初态，避免重播时闪现
+            maskEl.setAttribute('stroke-dasharray', '1');
+            maskEl.setAttribute('stroke-dashoffset', '1');
+          }
+          // 恢复 mask 属性
+          if (!currentPath.hasAttribute('mask') && maskEl) {
+            const mask = maskEl.parentElement;
+            if (mask && mask.id) {
+              currentPath.setAttribute('mask', `url(#${mask.id})`);
+            }
+          }
+        }
+      });
+
+      clearAll();
+      animateStroke(0, () => {
+        playBtn.textContent = '▶ 重播';
+      });
+    }
+
+    function resetAnimation() {
+      clearAll();
+      isPlaying = false;
+      playBtn.textContent = '▶ 重播';
+      playBtn.disabled = false;
+
+      const cells = strokesGrid.querySelectorAll('.stroke-cell');
+      cells.forEach(c => {
+        c.classList.remove('visible', 'active', 'done');
+        const currentPath = c.querySelector('.current-stroke');
+        if (currentPath) {
+          const maskEl = currentPath._maskPathEl;
+          if (maskEl) {
+            maskEl.setAttribute('stroke-dasharray', '1');
+            maskEl.setAttribute('stroke-dashoffset', '1');
+          }
+          if (!currentPath.hasAttribute('mask') && maskEl) {
+            const mask = maskEl.parentElement;
+            if (mask && mask.id) {
+              currentPath.setAttribute('mask', `url(#${mask.id})`);
+            }
+          }
+        }
+      });
+    }
+
+    async function loadCharacter(char) {
+      if (!char || !/[\u4e00-\u9fff\u3400-\u4dbf]/.test(char)) {
+        showError('请输入有效的汉字');
+        return;
+      }
+
+      currentChar = char;
+      resetAnimation();
+
+      try {
+        searchBtn.disabled = true;
+        searchBtn.textContent = '加载中...';
+        charInput.value = char;
+
+        const data = await fetchCharData(char);
+        currentCharData = data;
+
+        renderStrokesGrid(data.strokes, data.medians);
+        playAnimation();
+      } catch (err) {
+        showError(err.message || '加载失败，请重试');
+        console.error(err);
+      } finally {
+        searchBtn.disabled = false;
+        searchBtn.textContent = '演示';
+      }
+    }
+
+    searchBtn.addEventListener('click', () => {
+      const char = charInput.value.trim();
+      loadCharacter(char);
+    });
+
+    charInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        loadCharacter(charInput.value.trim());
+      }
+    });
+
+    charInput.addEventListener('input', (e) => {
+      if (e.target.value.length > 1) {
+        e.target.value = e.target.value.slice(-1);
+      }
+    });
+
+    playBtn.addEventListener('click', playAnimation);
+    resetBtn.addEventListener('click', resetAnimation);
+
+    quickChars.addEventListener('click', (e) => {
+      const target = e.target.closest('.quick-char');
+      if (target) {
+        loadCharacter(target.dataset.char);
+      }
+    });
+
+    loadCharacter('永');
+  </script>
+</body>
+</html>
