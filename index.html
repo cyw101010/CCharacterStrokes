@@ -113,6 +113,74 @@
       cursor: not-allowed;
     }
 
+    #voiceBtn {
+      width: 52px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: var(--accent);
+      background: var(--bg-card);
+      border: 2px solid var(--grid-border);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: transform 0.2s, background 0.2s, border-color 0.2s;
+      font-family: inherit;
+    }
+
+    #voiceBtn:active {
+      transform: scale(0.96);
+    }
+
+    #voiceBtn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    #voiceBtn.listening {
+      color: white;
+      background: linear-gradient(135deg, var(--accent-light), var(--accent));
+      border-color: transparent;
+      animation: voicePulse 1.2s ease-in-out infinite;
+    }
+
+    @keyframes voicePulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(230, 81, 0, 0.45);
+      }
+      50% {
+        box-shadow: 0 0 0 10px rgba(230, 81, 0, 0);
+      }
+    }
+
+    .voice-hint {
+      display: none;
+      margin: -8px 4px 16px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: #8D6E63;
+      text-align: center;
+    }
+
+    .voice-hint.visible {
+      display: block;
+    }
+
+    .voice-candidates {
+      display: none;
+      margin: -6px 0 16px;
+    }
+
+    .voice-candidates.visible {
+      display: flex;
+    }
+
+    .quick-char.selected {
+      background: var(--accent-light);
+      color: white;
+    }
+
     .error-message {
       background: #FFEBEE;
       color: #C62828;
@@ -167,6 +235,59 @@
       font-size: 13px;
       color: var(--accent);
       font-weight: 600;
+    }
+
+    .duration-setting {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .duration-label {
+      font-size: 13px;
+      color: #8D6E63;
+      flex-shrink: 0;
+    }
+
+    #durationRange {
+      flex: 1;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--bg-secondary);
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+      cursor: pointer;
+    }
+
+    #durationRange::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent-light), var(--accent));
+      box-shadow: 0 2px 6px rgba(230, 81, 0, 0.35);
+    }
+
+    #durationRange::-moz-range-thumb {
+      width: 22px;
+      height: 22px;
+      border: none;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent-light), var(--accent));
+      box-shadow: 0 2px 6px rgba(230, 81, 0, 0.35);
+    }
+
+    .duration-value {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--accent);
+      min-width: 38px;
+      text-align: right;
+      flex-shrink: 0;
+      font-variant-numeric: tabular-nums;
     }
 
     .strokes-grid {
@@ -315,7 +436,7 @@
   <div class="container">
     <div class="header">
       <h1>汉字笔画渐进展示</h1>
-      <p>输入汉字，逐笔演示书写顺序</p>
+      <p>输入或说出汉字，逐笔演示书写顺序</p>
     </div>
 
     <div class="input-section">
@@ -323,13 +444,16 @@
         <input
           type="text"
           id="charInput"
-          maxlength="1"
-          placeholder="请输入汉字"
+          placeholder="输入汉字，或“树木的树”"
           autocomplete="off"
         >
       </div>
       <button id="searchBtn">演示</button>
+      <button id="voiceBtn" title="语音输入" aria-label="语音输入">🎤</button>
     </div>
+
+    <div class="voice-hint" id="voiceHint"></div>
+    <div class="quick-chars voice-candidates" id="voiceCandidates"></div>
 
     <div class="error-message" id="errorMessage"></div>
 
@@ -337,6 +461,11 @@
       <div class="strokes-header">
         <div class="strokes-title">笔画分解</div>
         <div class="strokes-info" id="strokesInfo"></div>
+      </div>
+      <div class="duration-setting">
+        <span class="duration-label">演示时长</span>
+        <input type="range" id="durationRange" min="1" max="8" step="0.1" value="5" aria-label="笔画演示时长（秒）">
+        <span class="duration-value" id="durationValue">5.0s</span>
       </div>
       <div class="strokes-grid" id="strokesGrid"></div>
       <div class="strokes-controls">
@@ -367,6 +496,57 @@
     const playBtn = document.getElementById('playBtn');
     const resetBtn = document.getElementById('resetBtn');
     const quickChars = document.getElementById('quickChars');
+    const voiceBtn = document.getElementById('voiceBtn');
+    const voiceHint = document.getElementById('voiceHint');
+    const voiceCandidates = document.getElementById('voiceCandidates');
+    const durationRange = document.getElementById('durationRange');
+    const durationValue = document.getElementById('durationValue');
+
+    // 演示时长设置：整体时长（秒），钳制在 1～8 秒
+    const DURATION_MIN = 1;
+    const DURATION_MAX = 8;
+    // 现有动画节奏：每笔 800ms 动画 + 50ms 收尾 + 150ms 间隔 = 每笔 1 秒
+    const BASE_STROKE_MS = 800;
+    const BASE_SETTLE_MS = 50;
+    const BASE_GAP_MS = 150;
+    const BASE_SLOT_MS = BASE_STROKE_MS + BASE_SETTLE_MS + BASE_GAP_MS;
+
+    let targetTotalMs = 5000;   // 首次加载后按「现有动画时长」重算
+    let durationUserSet = false; // 用户手动调整过则不再自动跟随
+
+    function clampDuration(value) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return DURATION_MIN;
+      return Math.min(DURATION_MAX, Math.max(DURATION_MIN, n));
+    }
+
+    // 现有动画在给定笔数下的总时长
+    function currentAnimationMs(totalStrokes) {
+      return totalStrokes * BASE_SLOT_MS;
+    }
+
+    function syncDurationUI() {
+      const seconds = targetTotalMs / 1000;
+      durationRange.value = String(seconds);
+      durationValue.textContent = `${seconds.toFixed(1)}s`;
+    }
+
+    // 未手动设置时，默认值跟随当前字的现有动画时长（并收敛到 1～8 秒）
+    function applyDefaultDuration(totalStrokes) {
+      if (durationUserSet) return;
+      targetTotalMs = clampDuration(currentAnimationMs(totalStrokes) / 1000) * 1000;
+      syncDurationUI();
+    }
+
+    // 把「整体时长」平均分摊到每一笔，保持原有 800:50:150 的节奏比例
+    function getStrokeTiming(totalStrokes) {
+      const slot = targetTotalMs / Math.max(totalStrokes, 1);
+      return {
+        strokeMs: Math.max(30, slot * (BASE_STROKE_MS / BASE_SLOT_MS)),
+        settleMs: Math.max(0, slot * (BASE_SETTLE_MS / BASE_SLOT_MS)),
+        gapMs: Math.max(0, slot * (BASE_GAP_MS / BASE_SLOT_MS))
+      };
+    }
 
     let currentCharData = null;
     let currentChar = '';
@@ -532,6 +712,7 @@
 
     function animateStroke(index, onComplete) {
       const cells = strokesGrid.querySelectorAll('.stroke-cell');
+      const timing = getStrokeTiming(cells.length);
 
       if (index >= cells.length) {
         isPlaying = false;
@@ -550,7 +731,7 @@
         // 用 mask 沿笔画轨迹逐步揭示填充形状
         const maskPathEl = currentPath._maskPathEl;
 
-        const DURATION = 800;
+        const DURATION = timing.strokeMs;
 
         if (maskPathEl) {
           // 使用 pathLength="1" 归一化，dasharray=1，dashoffset 从 1 到 0
@@ -588,16 +769,16 @@
 
           const nextTimeout = setTimeout(() => {
             animateStroke(index + 1, onComplete);
-          }, 150);
+          }, timing.gapMs);
           animationTimeouts.push(nextTimeout);
-        }, DURATION + 50);
+        }, DURATION + timing.settleMs);
         animationTimeouts.push(timeout);
       } else {
         const timeout = setTimeout(() => {
           currentCell.classList.remove('active');
           currentCell.classList.add('done');
           animateStroke(index + 1, onComplete);
-        }, 700);
+        }, timing.strokeMs + timing.settleMs);
         animationTimeouts.push(timeout);
       }
     }
@@ -680,6 +861,7 @@
         currentCharData = data;
 
         renderStrokesGrid(data.strokes, data.medians);
+        applyDefaultDuration(data.strokes.length);
         playAnimation();
       } catch (err) {
         showError(err.message || '加载失败，请重试');
@@ -690,25 +872,247 @@
       }
     }
 
+    const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+    let isListening = false;
+
+    const HANZI_RE = /^[\u4e00-\u9fff\u3400-\u4dbf]$/;
+    const isHanzi = (c) => HANZI_RE.test(c);
+
+    // 从口语/文本中解析目标汉字，支持同音字消歧：
+    // 「树木的树」→ 树（取「的」后的字，而不是「木」）
+    // 「数量的数」→ 数
+    function parseCharFromText(raw) {
+      const text = (raw || '').replace(/[\s\u3000，。、！？；：,.!?;:"“”'‘’（）()《》<>~～\-—_]/g, '');
+      const chars = Array.from(text).filter(isHanzi);
+      const candidates = [];
+      const push = (c) => {
+        if (c && isHanzi(c) && !candidates.includes(c)) candidates.push(c);
+      };
+
+      // 规则 1：取最后一个「的 / 之」后面的字（同音字消歧的主要说法）
+      const deRe = /[的之]([\u4e00-\u9fff])/g;
+      let m;
+      let afterDe = null;
+      while ((m = deRe.exec(text)) !== null) afterDe = m[1];
+      if (afterDe) push(afterDe);
+
+      // 规则 2：「X字」「X这个字」
+      const ziRe = /([\u4e00-\u9fff])(?:这个)?字/g;
+      let z;
+      let beforeZi = null;
+      while ((z = ziRe.exec(text)) !== null) beforeZi = z[1];
+      if (beforeZi) push(beforeZi);
+
+      // 规则 3：整句只有一个汉字
+      if (chars.length === 1) push(chars[0]);
+
+      // 规则 4：其余汉字作为候选（用于手动点选纠正），过滤「的/之/字」这类虚词
+      const stopChars = new Set(['的', '之', '字', '这', '个', '是', '了', '啊', '呢', '吗']);
+      chars.forEach(c => {
+        if (!stopChars.has(c)) push(c);
+      });
+
+      return candidates;
+    }
+
+    function setVoiceHint(msg) {
+      if (!msg) {
+        voiceHint.textContent = '';
+        voiceHint.classList.remove('visible');
+        return;
+      }
+      voiceHint.textContent = msg;
+      voiceHint.classList.add('visible');
+    }
+
+    function showCandidates(candidates, chosen) {
+      voiceCandidates.innerHTML = '';
+      if (!candidates || candidates.length <= 1) {
+        voiceCandidates.classList.remove('visible');
+        return;
+      }
+      candidates.forEach(c => {
+        const btn = document.createElement('button');
+        btn.className = 'quick-char' + (c === chosen ? ' selected' : '');
+        btn.dataset.char = c;
+        btn.textContent = c;
+        voiceCandidates.appendChild(btn);
+      });
+      voiceCandidates.classList.add('visible');
+    }
+
+    // 统一入口：把「文字/语音识别结果」解析成单字并走既有笔画流程
+    function applyCharText(rawText, source) {
+      const display = (rawText || '').trim();
+      const candidates = parseCharFromText(display);
+
+      if (candidates.length === 0) {
+        showError(source === 'voice' ? '没有识别到有效汉字，请再说一次' : '请输入有效的汉字');
+        return;
+      }
+
+      const primary = candidates[0];
+      setVoiceHint(display && display !== primary ? `已解析「${display}」→ ${primary}` : '');
+      showCandidates(candidates, primary);
+      charInput.value = primary;
+      loadCharacter(primary);
+    }
+
+    function resetVoiceBtn() {
+      isListening = false;
+      voiceBtn.classList.remove('listening');
+      voiceBtn.textContent = '🎤';
+      voiceBtn.disabled = false;
+    }
+
+    function startVoiceInput() {
+      if (!SpeechRecognitionClass) {
+        showError('当前浏览器不支持语音输入，可手动输入「树木的树」这类说法');
+        return;
+      }
+      if (!window.isSecureContext) {
+        showError('语音输入需在 HTTPS 或 localhost 下使用，当前地址浏览器不允许用麦克风');
+        return;
+      }
+      if (isListening) {
+        try { recognition && recognition.stop(); } catch (e) {}
+        return;
+      }
+
+      try {
+        recognition = new SpeechRecognitionClass();
+      } catch (e) {
+        showError('语音输入初始化失败');
+        return;
+      }
+
+      recognition.lang = 'zh-CN';
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 5; // 多取几个候选，便于同音字纠正
+
+      let finalTexts = [];
+      let lastHeard = '';
+
+      recognition.onstart = () => {
+        isListening = true;
+        voiceBtn.classList.add('listening');
+        voiceBtn.textContent = '⏹';
+        voiceCandidates.classList.remove('visible');
+        setVoiceHint('正在聆听…可说「树木的树」来区分同音字');
+      };
+
+      recognition.onresult = (event) => {
+        let interim = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          for (let j = 0; j < result.length; j++) {
+            const t = (result[j].transcript || '').trim();
+            if (!t) continue;
+            if (result.isFinal) finalTexts.push(t);
+            else interim += t;
+          }
+        }
+        lastHeard = interim || finalTexts[finalTexts.length - 1] || lastHeard;
+        if (lastHeard) setVoiceHint(`听到「${lastHeard}」`);
+      };
+
+      recognition.onerror = (event) => {
+        const map = {
+          'not-allowed': '麦克风权限被拒绝，请允许浏览器使用麦克风',
+          'service-not-allowed': '语音服务不可用（需 HTTPS 或已授权麦克风）',
+          'no-speech': '没有听到声音，请再说一次',
+          'audio-capture': '未检测到麦克风设备',
+          'network': '语音识别网络异常，请重试',
+          'aborted': ''
+        };
+        if (!(event.error in map) || map[event.error] !== '') {
+          showError(map[event.error] || `语音识别失败（${event.error || '未知错误'}）`);
+        }
+        resetVoiceBtn();
+      };
+
+      recognition.onend = () => {
+        resetVoiceBtn();
+        const texts = finalTexts.length ? finalTexts : (lastHeard ? [lastHeard] : []);
+        if (!texts.length) {
+          setVoiceHint('');
+          showError('没有听到内容，请再说一次');
+          return;
+        }
+
+        // 合并所有识别候选（含同音字的多个 alternatives）
+        const merged = [];
+        texts.forEach(t => {
+          parseCharFromText(t).forEach(c => {
+            if (!merged.includes(c)) merged.push(c);
+          });
+        });
+
+        if (!merged.length) {
+          setVoiceHint('');
+          showError('没有识别到汉字，请再说一次');
+          return;
+        }
+
+        const primary = merged[0];
+        const heard = texts[0];
+        setVoiceHint(heard !== primary ? `听到「${heard}」→ ${primary}` : `听到「${primary}」`);
+        showCandidates(merged, primary);
+        charInput.value = primary;
+        loadCharacter(primary);
+      };
+
+      try {
+        recognition.start();
+      } catch (e) {
+        resetVoiceBtn();
+        showError('语音输入启动失败，请重试');
+      }
+    }
+
     searchBtn.addEventListener('click', () => {
-      const char = charInput.value.trim();
-      loadCharacter(char);
+      applyCharText(charInput.value, 'text');
     });
 
     charInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
-        loadCharacter(charInput.value.trim());
+        applyCharText(charInput.value, 'text');
       }
     });
 
-    charInput.addEventListener('input', (e) => {
-      if (e.target.value.length > 1) {
-        e.target.value = e.target.value.slice(-1);
-      }
+    voiceBtn.addEventListener('click', startVoiceInput);
+
+    voiceCandidates.addEventListener('click', (e) => {
+      const target = e.target.closest('.quick-char');
+      if (!target) return;
+      charInput.value = target.dataset.char;
+      loadCharacter(target.dataset.char);
+      showCandidates([], null);
+      setVoiceHint('');
     });
 
     playBtn.addEventListener('click', playAnimation);
     resetBtn.addEventListener('click', resetAnimation);
+
+    // 拖动时实时显示数值，松手后按新时长重播
+    durationRange.addEventListener('input', () => {
+      durationValue.textContent = `${clampDuration(durationRange.value).toFixed(1)}s`;
+    });
+
+    durationRange.addEventListener('change', () => {
+      const seconds = clampDuration(durationRange.value);
+      durationUserSet = true;
+      targetTotalMs = seconds * 1000;
+      syncDurationUI();
+
+      if (!currentCharData) return;
+      clearAll();
+      isPlaying = false;
+      playBtn.disabled = false;
+      playAnimation();
+    });
 
     quickChars.addEventListener('click', (e) => {
       const target = e.target.closest('.quick-char');
