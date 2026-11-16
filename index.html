@@ -167,6 +167,12 @@
       display: block;
     }
 
+    .voice-hint a {
+      color: var(--accent);
+      font-weight: 600;
+      word-break: break-all;
+    }
+
     .voice-candidates {
       display: none;
       margin: -6px 0 16px;
@@ -1517,12 +1523,11 @@
       voiceHint.classList.add('visible');
     }
 
+    // 候选字块常显：只有下一次真正罗列（多于一个字）时才覆盖，其余情况不清空
     function showCandidates(candidates, chosen) {
+      if (!candidates || candidates.length <= 1) return;
+
       voiceCandidates.innerHTML = '';
-      if (!candidates || candidates.length <= 1) {
-        voiceCandidates.classList.remove('visible');
-        return;
-      }
       candidates.forEach(c => {
         const btn = document.createElement('button');
         btn.className = 'quick-char' + (c === chosen ? ' selected' : '');
@@ -1531,6 +1536,12 @@
         voiceCandidates.appendChild(btn);
       });
       voiceCandidates.classList.add('visible');
+    }
+
+    function markChosen(chosen) {
+      voiceCandidates.querySelectorAll('.quick-char').forEach(btn => {
+        btn.classList.toggle('selected', btn.dataset.char === chosen);
+      });
     }
 
     // 合并多段识别文本（语音会有多个 alternatives），再统一按偏旁过滤
@@ -1610,13 +1621,33 @@
       voiceBtn.disabled = false;
     }
 
+    // 语音被拦截的提示只弹一次，之后改为常驻文案，避免每次点击都弹窗
+    const voiceNotice = { insecure: false, denied: false };
+
+    function httpsUrl() {
+      return `https://${location.hostname}:8443/`;
+    }
+
+    function showVoiceBlocked(kind, message, url) {
+      if (url) {
+        voiceHint.innerHTML = message.replace('{url}', `<a href="${url}">${url}</a>`);
+      } else {
+        voiceHint.textContent = message;
+      }
+      voiceHint.classList.add('visible');
+      if (!voiceNotice[kind]) {
+        voiceNotice[kind] = true;
+        showError(message.replace('{url}', url || '').replace(/\s+/g, ' ').trim());
+      }
+    }
+
     function startVoiceInput() {
       if (!SpeechRecognitionClass) {
-        showError('当前浏览器不支持语音输入，可手动输入「树木的树」这类说法');
+        showVoiceBlocked('unsupported', '当前浏览器不支持语音输入，可手动输入「三点水的潆」这类说法');
         return;
       }
       if (!window.isSecureContext) {
-        showError('语音输入需在 HTTPS 或 localhost 下使用，当前地址浏览器不允许用麦克风');
+        showVoiceBlocked('insecure', '当前是 HTTP 地址，浏览器禁止录音，请改用 {url}', httpsUrl());
         return;
       }
       if (isListening) {
@@ -1624,17 +1655,19 @@
         return;
       }
 
-      try {
-        recognition = new SpeechRecognitionClass();
-      } catch (e) {
-        showError('语音输入初始化失败');
-        return;
+      // 复用同一个识别实例，避免每次点击重新申请麦克风权限
+      if (!recognition) {
+        try {
+          recognition = new SpeechRecognitionClass();
+        } catch (e) {
+          showVoiceBlocked('unsupported', '语音输入初始化失败，可手动输入汉字');
+          return;
+        }
+        recognition.lang = 'zh-CN';
+        recognition.continuous = false;
+        recognition.interimResults = true;
+        recognition.maxAlternatives = 5; // 多取几个候选，便于同音字纠正
       }
-
-      recognition.lang = 'zh-CN';
-      recognition.continuous = false;
-      recognition.interimResults = true;
-      recognition.maxAlternatives = 5; // 多取几个候选，便于同音字纠正
 
       let finalTexts = [];
       let lastHeard = '';
@@ -1643,7 +1676,6 @@
         isListening = true;
         voiceBtn.classList.add('listening');
         voiceBtn.textContent = '⏹';
-        voiceCandidates.classList.remove('visible');
         setVoiceHint('正在聆听…可说「三点水的潆」「木字旁的树」这类说法');
       };
 
@@ -1663,16 +1695,16 @@
       };
 
       recognition.onerror = (event) => {
-        const map = {
-          'not-allowed': '麦克风权限被拒绝，请允许浏览器使用麦克风',
-          'service-not-allowed': '语音服务不可用（需 HTTPS 或已授权麦克风）',
-          'no-speech': '没有听到声音，请再说一次',
-          'audio-capture': '未检测到麦克风设备',
-          'network': '语音识别网络异常，请重试',
-          'aborted': ''
-        };
-        if (!(event.error in map) || map[event.error] !== '') {
-          showError(map[event.error] || `语音识别失败（${event.error || '未知错误'}）`);
+        const err = event.error || '';
+        if (err === 'not-allowed' || err === 'service-not-allowed') {
+          showVoiceBlocked('denied', '麦克风未授权，请在浏览器设置中允许本站使用麦克风，然后重试');
+        } else if (err !== 'aborted') {
+          const map = {
+            'no-speech': '没有听到声音，请再说一次',
+            'audio-capture': '未检测到麦克风设备',
+            'network': '语音识别网络异常，请重试'
+          };
+          showError(map[err] || `语音识别失败（${err || '未知错误'}）`);
         }
         resetVoiceBtn();
       };
@@ -1721,9 +1753,8 @@
       const target = e.target.closest('.quick-char');
       if (!target) return;
       charInput.value = target.dataset.char;
+      markChosen(target.dataset.char);
       loadCharacter(target.dataset.char);
-      showCandidates([], null);
-      setVoiceHint('');
     });
 
     playBtn.addEventListener('click', playAnimation);
@@ -1755,6 +1786,12 @@
     });
 
     loadCharacter('永');
+
+    // 非安全上下文下提前告知，避免用户每次点麦克风才看到报错
+    if (SpeechRecognitionClass && !window.isSecureContext) {
+      voiceHint.innerHTML = `语音输入需使用安全地址：<a href="${httpsUrl()}">${httpsUrl()}</a>`;
+      voiceHint.classList.add('visible');
+    }
   </script>
 </body>
 </html>
