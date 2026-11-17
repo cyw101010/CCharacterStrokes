@@ -491,7 +491,14 @@
   </div>
 
   <script>
-    const CDN_BASE = 'https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0';
+    // 多个镜像依次尝试，避免单一 CDN 在部分网络下不可用导致 Failed to fetch
+    const CDN_BASES = [
+      'https://cdn.jsdelivr.net/npm/hanzi-writer-data@2.0',
+      'https://fastly.jsdelivr.net/npm/hanzi-writer-data@2.0',
+      'https://gcore.jsdelivr.net/npm/hanzi-writer-data@2.0',
+      'https://unpkg.com/hanzi-writer-data@2.0'
+    ];
+    const DATA_CACHE_PREFIX = 'hwdata:';
 
     const charInput = document.getElementById('charInput');
     const searchBtn = document.getElementById('searchBtn');
@@ -573,13 +580,61 @@
       setTimeout(() => errorMessage.classList.remove('visible'), 3000);
     }
 
-    async function fetchCharData(char) {
-      const url = `${CDN_BASE}/${encodeURIComponent(char)}.json`;
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error('未找到该汉字的笔画数据');
+    function readCachedCharData(char) {
+      try {
+        const raw = localStorage.getItem(DATA_CACHE_PREFIX + char);
+        return raw ? JSON.parse(raw) : null;
+      } catch (e) {
+        return null;
       }
-      return response.json();
+    }
+
+    function cacheCharData(char, data) {
+      try {
+        localStorage.setItem(DATA_CACHE_PREFIX + char, JSON.stringify(data));
+      } catch (e) {
+        // 超出存储配额时忽略，不影响本次显示
+      }
+    }
+
+    async function fetchWithTimeout(url, timeout) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeout);
+      try {
+        const response = await fetch(url, { signal: controller.signal });
+        if (!response.ok) {
+          const err = new Error(response.status === 404 ? 'NOT_FOUND' : `HTTP ${response.status}`);
+          err.status = response.status;
+          throw err;
+        }
+        return await response.json();
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    async function fetchCharData(char) {
+      const cached = readCachedCharData(char);
+      if (cached) return cached;
+
+      let notFound = false;
+      for (const base of CDN_BASES) {
+        try {
+          const data = await fetchWithTimeout(`${base}/${encodeURIComponent(char)}.json`, 8000);
+          cacheCharData(char, data);
+          return data;
+        } catch (err) {
+          // 404 表示该字在任何镜像都不存在，无需继续尝试
+          if (err.message === 'NOT_FOUND') {
+            notFound = true;
+            break;
+          }
+          // 超时、网络错误、限流等换下一个镜像
+        }
+      }
+
+      if (notFound) throw new Error('未找到该汉字的笔画数据');
+      throw new Error('网络异常，笔画数据加载失败，请稍后重试');
     }
 
     function flipPathY(d) {
