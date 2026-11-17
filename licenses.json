@@ -1,0 +1,126 @@
+{
+  "total": 20,
+  "updatedAt": "2026-11-17T08:49:53.418Z",
+  "codes": [
+    {
+      "code": "CCS-VIP000001-TPJ2",
+      "serial": 1,
+      "status": "unused",
+      "createdAt": "2026-11-17T08:49:53.416Z"
+    },
+    {
+      "code": "CCS-VIP000002-A8PR",
+      "serial": 2,
+      "status": "unused",
+      "createdAt": "2026-11-17T08:49:53.416Z"
+    },
+    {
+      "code": "CCS-VIP000003-M7XP",
+      "serial": 3,
+      "status": "unused",
+      "createdAt": "2026-11-17T08:49:53.416Z"
+    },
+    {
+      "code": "CCS-VIP000004-CBA5",
+      "serial": 4,
+      "status": "unused",
+      "createdAt": "2026-11-17T08:49:53.416Z"
+    },
+    {
+      "code": "CCS-VIP000005-P7PQ",
+      "serial": 5,
+      "status": "unused",
+      "createdAt": "2026-11-17T08:49:53.416Z"
+    },
+    {
+      "code": "CCS-VIP000006-698R",
+      "serial": 6,
+      "status": "unused",
+      "createdAt": "2026-11-17T08:49:53.416Z"
+    },
+    {
+      "code": "CCS-VIP000007-HTBA",
+      "serial": 7,
+      "status": "unused",
+      "createdAt": "2026-11-17T08:49:53.416Z"
+    },
+    {
+      "code": "CCS-VIP000008-QTGQ",
+      "serial": 8,
+      "status": "unused",
+      "createdAt": "2026-11-17T08:49:53.416Z"
+    },
+    {
+      "code": "CCS-VIP000009-34W8",
+      "serial": 9,
+      "status": "unused",
+      "createdAt": "2026-11-17T08:49:53.416Z"
+    },
+    {
+      "code": "CCS-VIP000010-5BG9",
+      "serial": 10,
+      "status": "unused",
+      "createdAt": "2026-11-17T08:49:53.416Z"
+    },
+    {
+      "code": "CCS-VIP000011-SF5L",
+      "serial": 11,
+      "status": "unused",
+      "createdAt": "2026-11-17T08:49:53.416Z"
+    },
+    {
+      "code": "CCS-VIP000012-BTPT",
+      "serial": 12,
+      "status": "unused",
+      "createdAt": "2026-11-17T08:49:53.416Z"
+    },
+    {
+      "code": "CCS-VIP000013-YN3C",
+      "serial": 13,
+      "status": "unused",
+      "createdAt": "2026-11-17T08:49:53.416Z"
+    },
+    {
+      "code": "CCS-VIP000014-Z2CS",
+      "serial": 14,
+      "status": "unused",
+      "createdAt": "2026-11-17T08:49:53.416Z"
+    },
+    {
+      "code": "CCS-VIP000015-NCTJ",
+      "serial": 15,
+      "status": "unused",
+      "createdAt": "2026-11-17T08:49:53.416Z"
+    },
+    {
+      "code": "CCS-VIP000016-77EF",
+      "serial": 16,
+      "status": "unused",
+      "createdAt": "2026-11-17T08:49:53.416Z"
+    },
+    {
+      "code": "CCS-VIP000017-U8GF",
+      "serial": 17,
+      "status": "unused",
+      "createdAt": "2026-11-17T08:49:53.416Z"
+    },
+    {
+      "code": "CCS-VIP000018-DNE2",
+      "serial": 18,
+      "status": "unused",
+      "createdAt": "2026-11-17T08:49:53.416Z"
+    },
+    {
+      "code": "CCS-VIP000019-22Q2",
+      "serial": 19,
+      "status": "unused",
+      "createdAt": "2026-11-17T08:49:53.416Z"
+    },
+    {
+      "code": "CCS-VIP000020-6JMY",
+      "serial": 20,
+      "status": "unused",
+      "createdAt": "2026-11-17T08:49:53.416Z"
+    }
+  ]
+}

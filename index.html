@@ -425,6 +425,125 @@
       color: white;
     }
 
+    .quota-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 10px;
+      padding: 0 4px;
+      font-size: 12px;
+      color: #8D6E63;
+    }
+
+    .upgrade-link {
+      border: none;
+      background: none;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+      padding: 2px 0;
+    }
+
+    .quota-bar.pro .upgrade-link {
+      display: none;
+    }
+
+    .modal-mask {
+      position: fixed;
+      inset: 0;
+      background: rgba(62, 39, 35, 0.45);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 50;
+    }
+
+    .modal-mask.visible {
+      display: flex;
+    }
+
+    .modal-card {
+      width: 100%;
+      max-width: 340px;
+      background: var(--bg-card);
+      border-radius: 16px;
+      padding: 22px 20px;
+      box-shadow: 0 12px 40px rgba(62, 39, 35, 0.25);
+    }
+
+    .modal-card h2 {
+      font-size: 17px;
+      color: var(--accent);
+      margin-bottom: 12px;
+    }
+
+    .modal-card ul {
+      list-style: none;
+      margin-bottom: 16px;
+    }
+
+    .modal-card li {
+      font-size: 13px;
+      line-height: 1.9;
+      color: var(--text);
+    }
+
+    .modal-card li::before {
+      content: '✓';
+      color: var(--accent-light);
+      margin-right: 6px;
+    }
+
+    .modal-input {
+      width: 100%;
+      padding: 11px 12px;
+      border: 1px solid var(--grid-border);
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+      background: #fff;
+      color: var(--text);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .modal-actions button {
+      flex: 1;
+      padding: 11px;
+      border: none;
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: inherit;
+      cursor: pointer;
+      background: var(--bg-secondary);
+      color: var(--accent);
+    }
+
+    .modal-actions button.primary {
+      color: #fff;
+      background: linear-gradient(135deg, var(--accent-light), var(--accent));
+    }
+
+    .modal-tip {
+      margin-top: 10px;
+      min-height: 16px;
+      font-size: 12px;
+      text-align: center;
+      color: #D84315;
+    }
+
     @media (max-width: 360px) {
       .strokes-grid {
         gap: 6px;
@@ -458,6 +577,11 @@
       <button id="voiceBtn" title="语音输入" aria-label="语音输入">🎤</button>
     </div>
 
+    <div class="quota-bar" id="quotaBar">
+      <span id="quotaText">今日免费剩余 5 字</span>
+      <button class="upgrade-link" id="upgradeBtn">升级会员</button>
+    </div>
+
     <div class="voice-hint" id="voiceHint"></div>
     <div class="quick-chars voice-candidates" id="voiceCandidates"></div>
 
@@ -487,6 +611,23 @@
       <button class="quick-char" data-char="爱">爱</button>
       <button class="quick-char" data-char="書">書</button>
       <button class="quick-char" data-char="龙">龙</button>
+    </div>
+  </div>
+
+  <div class="modal-mask" id="licenseModal">
+    <div class="modal-card">
+      <h2>解锁无限练习</h2>
+      <ul>
+        <li>每日不限字数，任意练习</li>
+        <li>随时回看任意字的笔画分解</li>
+        <li>后续新增功能自动解锁</li>
+      </ul>
+      <input class="modal-input" id="licenseInput" placeholder="输入激活码 CCS-XXXXXXXX-XXXX" autocomplete="off">
+      <div class="modal-actions">
+        <button id="licenseCancel">稍后再说</button>
+        <button class="primary" id="licenseSubmit">立即解锁</button>
+      </div>
+      <div class="modal-tip" id="licenseTip"></div>
     </div>
   </div>
 
@@ -904,9 +1045,146 @@
       });
     }
 
-    async function loadCharacter(char) {
+    // ===== 免费额度与激活码（纯前端试水版）=====
+    const FREE_DAILY_CHARS = 5;
+    const QUOTA_KEY = 'ccs_quota';
+    const LICENSE_KEY = 'ccs_license';
+    const LICENSE_SALT = 'cchar-strokes-2026';
+    const CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
+
+    const quotaBar = document.getElementById('quotaBar');
+    const quotaText = document.getElementById('quotaText');
+    const upgradeBtn = document.getElementById('upgradeBtn');
+    const licenseModal = document.getElementById('licenseModal');
+    const licenseInput = document.getElementById('licenseInput');
+    const licenseTip = document.getElementById('licenseTip');
+
+    function todayStr() {
+      const d = new Date();
+      return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+    }
+
+    function readQuota() {
+      const blank = { date: todayStr(), chars: [] };
+      try {
+        const saved = JSON.parse(localStorage.getItem(QUOTA_KEY) || 'null');
+        if (!saved || saved.date !== blank.date || !Array.isArray(saved.chars)) return blank;
+        return saved;
+      } catch (e) {
+        return blank;
+      }
+    }
+
+    function saveQuota(quota) {
+      try {
+        localStorage.setItem(QUOTA_KEY, JSON.stringify(quota));
+      } catch (e) {}
+    }
+
+    // 校验位：由前 8 位加盐哈希得出，避免用户随意试出有效码
+    function licenseChecksum(data) {
+      let h = 2166136261;
+      const s = data + LICENSE_SALT;
+      for (let i = 0; i < s.length; i++) {
+        h ^= s.charCodeAt(i);
+        h = Math.imul(h, 16777619) >>> 0;
+      }
+      let out = '';
+      for (let i = 0; i < 4; i++) {
+        out += CODE_ALPHABET[h % 32];
+        h = Math.floor(h / 32);
+      }
+      return out;
+    }
+
+    function normalizeLicense(raw) {
+      let code = (raw || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
+      if (code.startsWith('CCS')) code = code.slice(3);
+      return code;
+    }
+
+    function isValidLicense(raw) {
+      const code = normalizeLicense(raw);
+      // 数据段 8 位（CCS-XXXXXXXX-XXXX）或 9 位（CCS-VIP000001-XXXX）
+      if (code.length < 12 || code.length > 13) return false;
+      const data = code.slice(0, -4);
+      return licenseChecksum(data) === code.slice(-4);
+    }
+
+    function isPro() {
+      try {
+        return isValidLicense(localStorage.getItem(LICENSE_KEY) || '');
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function remainingQuota() {
+      return Math.max(0, FREE_DAILY_CHARS - readQuota().chars.length);
+    }
+
+    function updateQuotaUI() {
+      if (isPro()) {
+        quotaBar.classList.add('pro');
+        quotaText.textContent = '已解锁 · 无限练习';
+        return;
+      }
+      quotaBar.classList.remove('pro');
+      quotaText.textContent = `今日免费剩余 ${remainingQuota()} 字`;
+    }
+
+    function openLicenseModal(message) {
+      licenseTip.textContent = message || '';
+      licenseInput.value = '';
+      licenseModal.classList.add('visible');
+    }
+
+    function closeLicenseModal() {
+      licenseModal.classList.remove('visible');
+    }
+
+    function consumeQuota(char) {
+      const quota = readQuota();
+      if (!quota.chars.includes(char)) {
+        quota.chars.push(char);
+        saveQuota(quota);
+      }
+      updateQuotaUI();
+    }
+
+    function canViewChar(char) {
+      if (isPro()) return true;
+      const quota = readQuota();
+      // 当天已经看过的字不再重复计数
+      return quota.chars.includes(char) || quota.chars.length < FREE_DAILY_CHARS;
+    }
+
+    upgradeBtn.addEventListener('click', () => openLicenseModal(''));
+    licenseModal.addEventListener('click', (e) => {
+      if (e.target === licenseModal) closeLicenseModal();
+    });
+    document.getElementById('licenseCancel').addEventListener('click', closeLicenseModal);
+    document.getElementById('licenseSubmit').addEventListener('click', () => {
+      const code = licenseInput.value.trim();
+      if (!isValidLicense(code)) {
+        licenseTip.textContent = '激活码无效，请检查后重试';
+        return;
+      }
+      try {
+        localStorage.setItem(LICENSE_KEY, normalizeLicense(code));
+      } catch (e) {}
+      closeLicenseModal();
+      updateQuotaUI();
+    });
+
+    async function loadCharacter(char, options = {}) {
       if (!char || !/[\u4e00-\u9fff\u3400-\u4dbf]/.test(char)) {
         showError('请输入有效的汉字');
+        return;
+      }
+
+      if (!options.free && !canViewChar(char)) {
+        openLicenseModal('今日免费额度已用完，明天再来，或输入激活码解锁');
         return;
       }
 
@@ -924,6 +1202,8 @@
         renderStrokesGrid(data.strokes, data.medians);
         applyDefaultDuration(data.strokes.length);
         playAnimation();
+
+        if (!options.free) consumeQuota(char);
       } catch (err) {
         showError(err.message || '加载失败，请重试');
         console.error(err);
@@ -1840,7 +2120,9 @@
       }
     });
 
-    loadCharacter('永');
+    // 首屏默认字不计入免费额度，让用户先完整体验一次
+    updateQuotaUI();
+    loadCharacter('永', { free: true });
 
     // 非安全上下文下提前告知，避免用户每次点麦克风才看到报错
     if (SpeechRecognitionClass && !window.isSecureContext) {
